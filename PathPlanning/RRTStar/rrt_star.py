@@ -32,8 +32,8 @@ class RRTStar(RRT):
                  goal,
                  obstacle_list,
                  rand_area,
-                 expand_dis=30.0,
-                 path_resolution=1.0,
+                 expand_dis=50,
+                 path_resolution=.01,
                  goal_sample_rate=20,
                  max_iter=300,
                  connect_circle_dist=50.0,
@@ -71,9 +71,11 @@ class RRTStar(RRT):
             new_node = self.steer(self.node_list[nearest_ind], rnd,
                                   self.expand_dis)
             near_node = self.node_list[nearest_ind]
-            new_node.cost = near_node.cost + \
-                math.hypot(new_node.x-near_node.x,
-                           new_node.y-near_node.y)
+            # change this to calc_new_cost
+            # new_node.cost = near_node.cost + \
+            #     math.hypot(new_node.x-near_node.x,
+            #                new_node.y-near_node.y)
+            new_node.cost = self.calc_new_cost(near_node, new_node)
 
             if self.check_collision(
                     new_node, self.obstacle_list, self.robot_radius):
@@ -264,10 +266,10 @@ def main():
 
     # Set Initial parameters
     rrt_star = RRTStar(
-        start=[0, 0],
-        goal=[6, 10],
-        rand_area=[-2, 15],
-        obstacle_list=obstacle_list,
+        start=[15, 15],
+        goal=[0, 0],
+        rand_area=[-30, 30],
+        obstacle_list=[],
         expand_dis=1,
         robot_radius=0.8)
     path = rrt_star.planning(animation=show_animation)
