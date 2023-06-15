@@ -10,6 +10,7 @@ import math
 import sys
 import matplotlib.pyplot as plt
 import pathlib
+
 sys.path.append(str(pathlib.Path(__file__).parent.parent))
 
 from RRT.rrt import RRT
@@ -27,18 +28,20 @@ class RRTStar(RRT):
             super().__init__(x, y)
             self.cost = 0.0
 
-    def __init__(self,
-                 start,
-                 goal,
-                 obstacle_list,
-                 rand_area,
-                 expand_dis=50,
-                 path_resolution=.01,
-                 goal_sample_rate=20,
-                 max_iter=300,
-                 connect_circle_dist=50.0,
-                 search_until_max_iter=False,
-                 robot_radius=0.0):
+    def __init__(
+        self,
+        start,
+        goal,
+        obstacle_list,
+        rand_area,
+        expand_dis=50,
+        path_resolution=0.01,
+        goal_sample_rate=20,
+        max_iter=300,
+        connect_circle_dist=50.0,
+        search_until_max_iter=False,
+        robot_radius=0.0,
+    ):
         """
         Setting Parameter
 
@@ -48,13 +51,24 @@ class RRTStar(RRT):
         randArea:Random Sampling Area [min,max]
 
         """
-        super().__init__(start, goal, obstacle_list, rand_area, expand_dis,
-                         path_resolution, goal_sample_rate, max_iter,
-                         robot_radius=robot_radius)
+        super().__init__(
+            start,
+            goal,
+            obstacle_list,
+            rand_area,
+            expand_dis,
+            path_resolution,
+            goal_sample_rate,
+            max_iter,
+            robot_radius=robot_radius,
+        )
         self.connect_circle_dist = connect_circle_dist
         self.goal_node = self.Node(goal[0], goal[1])
         self.search_until_max_iter = search_until_max_iter
         self.node_list = []
+
+        self.rnds = []
+        self.rnds_given = False
 
     def planning(self, animation=True):
         """
@@ -65,11 +79,14 @@ class RRTStar(RRT):
 
         self.node_list = [self.start]
         for i in range(self.max_iter):
-            print("Iter:", i, ", number of nodes:", len(self.node_list))
-            rnd = self.get_random_node()
+            # print("Iter:", i, ", number of nodes:", len(self.node_list))
+            if self.rnds_given:
+                rnd = self.rnds[i]
+            else:
+                rnd = self.get_random_node()
+                self.rnds.append(rnd)
             nearest_ind = self.get_nearest_node_index(self.node_list, rnd)
-            new_node = self.steer(self.node_list[nearest_ind], rnd,
-                                  self.expand_dis)
+            new_node = self.steer(self.node_list[nearest_ind], rnd, self.expand_dis)
             near_node = self.node_list[nearest_ind]
             # change this to calc_new_cost
             # new_node.cost = near_node.cost + \
@@ -77,11 +94,9 @@ class RRTStar(RRT):
             #                new_node.y-near_node.y)
             new_node.cost = self.calc_new_cost(near_node, new_node)
 
-            if self.check_collision(
-                    new_node, self.obstacle_list, self.robot_radius):
+            if self.check_collision(new_node, self.obstacle_list, self.robot_radius):
                 near_inds = self.find_near_nodes(new_node)
-                node_with_updated_parent = self.choose_parent(
-                    new_node, near_inds)
+                node_with_updated_parent = self.choose_parent(new_node, near_inds)
                 if node_with_updated_parent:
                     self.rewire(node_with_updated_parent, near_inds)
                     self.node_list.append(node_with_updated_parent)
@@ -91,9 +106,9 @@ class RRTStar(RRT):
             if animation:
                 self.draw_graph(rnd)
 
-            if ((not self.search_until_max_iter)
-                    and new_node):  # if reaches goal
+            if (not self.search_until_max_iter) and new_node:  # if reaches goal
                 last_index = self.search_best_goal_node()
+                print(f"at iteration {i} the last index is {last_index}")
                 if last_index is not None:
                     return self.generate_final_course(last_index)
 
@@ -130,7 +145,8 @@ class RRTStar(RRT):
             near_node = self.node_list[i]
             t_node = self.steer(near_node, new_node)
             if t_node and self.check_collision(
-                    t_node, self.obstacle_list, self.robot_radius):
+                t_node, self.obstacle_list, self.robot_radius
+            ):
                 costs.append(self.calc_new_cost(near_node, new_node))
             else:
                 costs.append(float("inf"))  # the cost of collision node
@@ -147,27 +163,27 @@ class RRTStar(RRT):
         return new_node
 
     def search_best_goal_node(self):
-        dist_to_goal_list = [
-            self.calc_dist_to_goal(n.x, n.y) for n in self.node_list
-        ]
+        dist_to_goal_list = [self.calc_dist_to_goal(n.x, n.y) for n in self.node_list]
         goal_inds = [
-            dist_to_goal_list.index(i) for i in dist_to_goal_list
+            dist_to_goal_list.index(i)
+            for i in dist_to_goal_list
             if i <= self.expand_dis
         ]
 
         safe_goal_inds = []
         for goal_ind in goal_inds:
             t_node = self.steer(self.node_list[goal_ind], self.goal_node)
-            if self.check_collision(
-                    t_node, self.obstacle_list, self.robot_radius):
+            if self.check_collision(t_node, self.obstacle_list, self.robot_radius):
                 safe_goal_inds.append(goal_ind)
 
         if not safe_goal_inds:
             return None
 
-        safe_goal_costs = [self.node_list[i].cost +
-                           self.calc_dist_to_goal(self.node_list[i].x, self.node_list[i].y)
-                           for i in safe_goal_inds]
+        safe_goal_costs = [
+            self.node_list[i].cost
+            + self.calc_dist_to_goal(self.node_list[i].x, self.node_list[i].y)
+            for i in safe_goal_inds
+        ]
 
         min_cost = min(safe_goal_costs)
         for i, cost in zip(safe_goal_inds, safe_goal_costs):
@@ -195,28 +211,30 @@ class RRTStar(RRT):
         r = self.connect_circle_dist * math.sqrt(math.log(nnode) / nnode)
         # if expand_dist exists, search vertices in a range no more than
         # expand_dist
-        if hasattr(self, 'expand_dis'):
+        if hasattr(self, "expand_dis"):
             r = min(r, self.expand_dis)
-        dist_list = [(node.x - new_node.x)**2 + (node.y - new_node.y)**2
-                     for node in self.node_list]
+        dist_list = [
+            (node.x - new_node.x) ** 2 + (node.y - new_node.y) ** 2
+            for node in self.node_list
+        ]
         near_inds = [dist_list.index(i) for i in dist_list if i <= r**2]
         return near_inds
 
     def rewire(self, new_node, near_inds):
         """
-            For each node in near_inds, this will check if it is cheaper to
-            arrive to them from new_node.
-            In such a case, this will re-assign the parent of the nodes in
-            near_inds to new_node.
-            Parameters:
-            ----------
-                new_node, Node
-                    Node randomly added which can be joined to the tree
+        For each node in near_inds, this will check if it is cheaper to
+        arrive to them from new_node.
+        In such a case, this will re-assign the parent of the nodes in
+        near_inds to new_node.
+        Parameters:
+        ----------
+            new_node, Node
+                Node randomly added which can be joined to the tree
 
-                near_inds, list of uints
-                    A list of indices of the self.new_node which contains
-                    nodes within a circle of a given radius.
-            Remark: parent is designated in choose_parent.
+            near_inds, list of uints
+                A list of indices of the self.new_node which contains
+                nodes within a circle of a given radius.
+        Remark: parent is designated in choose_parent.
 
         """
         for i in near_inds:
@@ -227,7 +245,8 @@ class RRTStar(RRT):
             edge_node.cost = self.calc_new_cost(new_node, near_node)
 
             no_collision = self.check_collision(
-                edge_node, self.obstacle_list, self.robot_radius)
+                edge_node, self.obstacle_list, self.robot_radius
+            )
             improved_cost = near_node.cost > edge_node.cost
 
             if no_collision and improved_cost:
@@ -242,11 +261,14 @@ class RRTStar(RRT):
         return from_node.cost + d
 
     def propagate_cost_to_leaves(self, parent_node):
-
         for node in self.node_list:
             if node.parent == parent_node:
                 node.cost = self.calc_new_cost(parent_node, node)
                 self.propagate_cost_to_leaves(node)
+
+    def import_random_nodes(self, rnds):
+        self.rnds = rnds
+        self.rnds_given = True
 
 
 def main():
@@ -271,7 +293,8 @@ def main():
         rand_area=[-30, 30],
         obstacle_list=[],
         expand_dis=1,
-        robot_radius=0.8)
+        robot_radius=0.8,
+    )
     path = rrt_star.planning(animation=show_animation)
 
     if path is None:
@@ -282,10 +305,10 @@ def main():
         # Draw final path
         if show_animation:
             rrt_star.draw_graph()
-            plt.plot([x for (x, y) in path], [y for (x, y) in path], 'r--')
+            plt.plot([x for (x, y) in path], [y for (x, y) in path], "r--")
             plt.grid(True)
             plt.show()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
